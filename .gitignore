@@ -1,0 +1,13 @@
+
+data/
+dataset/
+models/
+results/logs/
+
+__pycache__/
+*.py[cod]
+.env
+*.egg-info/
+
+.DS_Store
+Thumbs.db

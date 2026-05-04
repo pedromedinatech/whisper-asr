@@ -1,0 +1,27 @@
+name: whisper-asr
+channels:
+  - conda-forge  # community repository with up-to-date packages
+  - defaults
+
+dependencies:
+  # Base runtime
+  - python=3.11
+  - pip
+
+  # PyTorch is intentionally excluded from conda dependencies
+  # Install it separately after activating this environment (see README)
+  # Reason: conda's pytorch channel lags behind pip, and CUDA version bindings
+  # must match the host system. The PyTorch website generates the correct command
+
+  - pip:
+    - transformers>=4.40  # Core HuggingFace library. For the fine-tuning pipeline
+    - datasets>=2.18  # HuggingFace datasets library. Handles caching and parallel processing
+    - evaluate  # HuggingFace metrics library. For Word Error Rate and Character Error Rate during training and benchmarking
+    - jiwer # Fast offline WER/CER computation. 
+    - librosa # Audio analysis library. Used to load any audio format and resample to 16kHz mono, the format required by Whisper's feature extractor
+    - soundfile # WAV/FLAC read and write. librosa depends on soundfile for PCM files
+    - accelerate  # HuggingFace training optimization
+    - openai-whisper  # OpenAI's original Whisper library. Not used for fine-tuning, only zero-shot inference
+    - gradio  # Web interface framework. Used to build the demo app with audio input and text output
+    - pandas
+    - tensorboard # Training visualization
