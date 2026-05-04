@@ -15,10 +15,10 @@ from datasets import load_dataset, Audio, Dataset
 from transformers import WhisperProcessor
 
 
-MODEL_ID        = "openai/whisper-small"
-DATASET_ID      = "facebook/voxpopuli"
-LANGUAGE_CODE   = "es"
-OUTPUT_DIR      = Path("data/opendata/processed/voxpopuli_es")
+MODEL_ID = "openai/whisper-small"
+DATASET_ID = "facebook/voxpopuli"
+LANGUAGE_CODE = "es"
+OUTPUT_DIR = Path("data/opendata/processed/voxpopuli_es")
 
 MAX_TRAIN_SAMPLES = 5000  # ~7 hours; enough for Whisper-small fine-tuning
 MAX_EVAL_SAMPLES  = 1000
