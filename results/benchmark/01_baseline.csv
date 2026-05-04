@@ -1,0 +1,2 @@
+model,variant,dataset,samples,wer,cer
+openai/whisper-small,zero-shot,voxpopuli/es/test,500,0.1417,0.0966
