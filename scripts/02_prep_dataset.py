@@ -1,7 +1,7 @@
 """
-Dataset preparation: downloads VoxPopuli Spanish (train + validation),
-filters bad samples, pre-computes mel spectrograms and label token IDs,
-and saves to disk so the fine-tuning script loads instantly.
+Sources:
+  VoxPopuli: facebook/voxpopuli, config 'es'
+  MLS: facebook/multilingual_librispeech, config 'spanish'
 """
 
 import io
@@ -9,29 +9,31 @@ import re
 import torch
 import torchaudio
 import soundfile as sf
-from pathlib import Path
+import numpy as np
 import pandas as pd
-from datasets import load_dataset, Audio, Dataset
+from pathlib import Path
+from datasets import load_dataset, Audio, Dataset, concatenate_datasets
 from transformers import WhisperProcessor
 
-
 MODEL_ID = "openai/whisper-small"
-DATASET_ID = "facebook/voxpopuli"
-LANGUAGE_CODE = "es"
-OUTPUT_DIR = Path("data/opendata/processed/voxpopuli_es")
+VP_DIR = Path("data/opendata/processed/voxpopuli_es")
+MLS_DIR = Path("data/opendata/processed/mls_es")
+COMBINED_DIR = Path("data/opendata/processed/combined_es")
 
-MAX_TRAIN_SAMPLES = 5000  # ~7 hours; enough for Whisper-small fine-tuning
-MAX_EVAL_SAMPLES  = 1000
+SAMPLE_LIMITS = {
+    "voxpopuli": {"train": 5000, "validation": 500},
+    "mls": {"train": 5000, "validation": 500},
+}
 
 MIN_DURATION_S = 0.5
-MAX_DURATION_S = 29.5  # Whisper cap is 30 s
+MAX_DURATION_S = 29.5
+SHUFFLE_SEED = 42
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+for d in [VP_DIR, MLS_DIR, COMBINED_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
 
 print(f"Loading processor from {MODEL_ID} ...")
-processor = WhisperProcessor.from_pretrained(
-    MODEL_ID, language="spanish", task="transcribe"
-)
+processor = WhisperProcessor.from_pretrained(MODEL_ID, language="spanish", task="transcribe")
 
 
 def normalize(text: str) -> str:
@@ -41,68 +43,83 @@ def normalize(text: str) -> str:
     return text
 
 
-def prepare_sample(sample):
-    raw = sample["audio"]
-    audio_bytes = raw["bytes"] if raw["bytes"] else open(raw["path"], "rb").read()
-    audio, src_sr = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=False)
+def resample_if_needed(audio: np.ndarray, src_sr: int) -> np.ndarray:
+    if src_sr == 16000:
+        return audio
+    tensor = torch.from_numpy(audio).unsqueeze(0)
+    tensor = torchaudio.functional.resample(tensor, src_sr, 16000)
+    return tensor.squeeze(0).numpy()
 
-    if src_sr != 16000:
-        audio_tensor = torch.from_numpy(audio).unsqueeze(0)
-        audio_tensor = torchaudio.functional.resample(audio_tensor, src_sr, 16000)
-        audio = audio_tensor.squeeze(0).numpy()
 
+def extract_features(audio: np.ndarray, text: str) -> dict | None:
+    """Convert 16kHz mono audio + transcript to Whisper input_features and label token IDs."""
+    duration = len(audio) / 16000.0
+    if not (MIN_DURATION_S <= duration <= MAX_DURATION_S):
+        return None
+    norm = normalize(text)
+    if not norm:
+        return None
     inputs = processor(audio, sampling_rate=16000, return_tensors="np")
-    sample["input_features"] = inputs.input_features[0]
-    sample["labels"] = processor.tokenizer(normalize(sample["normalized_text"])).input_ids
-    sample["duration"] = len(audio) / 16000.0
-
-    return sample
+    labels = processor.tokenizer(norm).input_ids
+    return {"input_features": inputs.input_features[0], "labels": labels}
 
 
-def is_valid(sample) -> bool:
-    if not sample.get("normalized_text", "").strip():
-        return False
-    dur = sample.get("duration", 0.0)
-    return MIN_DURATION_S <= dur <= MAX_DURATION_S
+def process_and_save(source: str, split: str, out_dir: Path) -> Dataset:
+    """Stream, process, and save one source+split. Returns the Dataset (from disk if already done)."""
+    marker = out_dir / split / "dataset_info.json"
+    if marker.exists():
+        print(f"{source} ({split}): already on disk, loading ...")
+        return Dataset.load_from_disk(str(out_dir / split))
 
+    if source == "voxpopuli":
+        ds = load_dataset("facebook/voxpopuli", "es", split=split, streaming=True)
+        text_col = "normalized_text"
+    else:
+        mls_split = "dev" if split == "validation" else split
+        ds = load_dataset("facebook/multilingual_librispeech", "spanish", split=mls_split, streaming=True)
+        text_col = "transcript"
 
-for split, max_samples in [("train", MAX_TRAIN_SAMPLES), ("validation", MAX_EVAL_SAMPLES)]:
-    print(f"\n[{split}]")
-
-    # streaming=True + take() stops downloading after max_samples records,
-    # so only the first shard(s) are fetched instead of the full 30 GB.
-    ds = load_dataset(DATASET_ID, LANGUAGE_CODE, split=split, streaming=True)
     ds = ds.cast_column("audio", Audio(decode=False))
-    ds = ds.take(max_samples)
+    ds = ds.take(SAMPLE_LIMITS[source][split])
 
-    processed = []
+    print(f"Streaming {source} ({split}, up to {SAMPLE_LIMITS[source][split]}) ...")
+    results = []
     for i, sample in enumerate(ds):
-        result = prepare_sample(sample)
-        if is_valid(result):
-            processed.append({
-                "input_features": result["input_features"],
-                "labels": result["labels"],
-            })
+        raw = sample["audio"]
+        audio_bytes = raw["bytes"] if raw["bytes"] else open(raw["path"], "rb").read()
+        audio, src_sr = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=False)
+        audio = resample_if_needed(audio, src_sr)
+        feat = extract_features(audio, sample.get(text_col, ""))
+        if feat:
+            results.append(feat)
         if (i + 1) % 500 == 0:
-            print(f"  {i + 1}/{max_samples} processed, {len(processed)} valid so far")
+            print(f"{i + 1}/{SAMPLE_LIMITS[source][split]} scanned, {len(results)} valid")
 
-    ds_out = Dataset.from_list(processed)
-    print(f"  {len(ds_out)} valid samples saved")
-
-    out_path = OUTPUT_DIR / split
-    ds_out.save_to_disk(str(out_path))
-    print(f"  Saved to {out_path}")
+    ds_out = Dataset.from_list(results)
+    ds_out.save_to_disk(str(out_dir / split))
+    print(f"{source} ({split}): {len(ds_out)} samples saved to {out_dir / split}")
+    return ds_out
 
 
-ds_train = Dataset.load_from_disk(str(OUTPUT_DIR / "train"))
+for split in ["train", "validation"]:
+    print(f"\nSplit: {split}")
 
+    vp_ds = process_and_save("voxpopuli", split, VP_DIR)
+    mls_ds = process_and_save("mls", split, MLS_DIR)
+
+    combined = concatenate_datasets([vp_ds, mls_ds]).shuffle(seed=SHUFFLE_SEED)
+    combined.save_to_disk(str(COMBINED_DIR / split))
+    print(f"Combined: {len(combined)} samples saved to {COMBINED_DIR / split}")
+
+
+ds_train = Dataset.load_from_disk(str(COMBINED_DIR / "train"))
 sample_df = pd.DataFrame([{
     "tokens": len(s["labels"]),
     "transcript": processor.tokenizer.decode(s["labels"], skip_special_tokens=True),
 } for s in ds_train.select(range(min(100, len(ds_train))))])
 
 sample_path = Path("results/benchmark/02_dataset_sample.csv")
+sample_path.parent.mkdir(parents=True, exist_ok=True)
 sample_df.to_csv(sample_path, index=False)
-print(f"\nSample saved to {sample_path}")
-
-print("ok.", OUTPUT_DIR)
+print(f"\nSample preview saved to {sample_path}")
+print("Done.")
