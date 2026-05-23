@@ -3,17 +3,6 @@ Generates a ready-to-fill metadata.csv at data/personal/metadata.csv.
 
 Each row corresponds to one chunk of the recording text. Add a row per speaker
 per chunk:  copy a row, change filename and speaker, set difficulty.
-
-Columns:
-  filename   - audio file name in data/personal/audio/  e.g. pedro_001.wav
-  chunk      - chunk number (001-050)
-  speaker    - speaker identifier  e.g. pedro, ana, carlos
-  difficulty - 1 (clear), 2 (casual pace), 3 (fast/noisy)
-  transcript - pre-filled from the reference text (do not edit)
-  notes      - optional free text
-
-Run once:
-  conda run -n whisper-asr python scripts/00_init_metadata.py
 """
 
 import pandas as pd
@@ -92,8 +81,8 @@ df.to_csv(META_PATH, index=False)
 print(f"Created {META_PATH} with {len(df)} rows.")
 print()
 print("Next steps:")
-print("  1. For each speaker, duplicate the rows and replace SPEAKER with the speaker name")
-print("     e.g. pedro_001.wav, ana_001.wav — same chunk = same transcript")
-print("  2. Set difficulty: 1=clear, 2=casual, 3=fast/noisy")
-print("  3. Place audio files in data/personal/audio/")
-print("  4. Run: conda run -n whisper-asr python scripts/03_personal_data.py")
+print("1. For each speaker, duplicate the rows and replace SPEAKER with the speaker name")
+print("     e.g. pedro_001.wav, ana_001.wav - same chunk = same transcript")
+print("2. Set difficulty: 1=clear, 2=casual, 3=fast/noisy")
+print("3. Place audio files in data/personal/audio/")
+print("4. Run: conda run -n whisper-asr python scripts/03_personal_data.py")

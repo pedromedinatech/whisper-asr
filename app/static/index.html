@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Whisper Spanish ASR</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      padding: 2rem;
+      width: 100%;
+      max-width: 640px;
+    }
+
+    h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.75rem; }
+
+    .section-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #888;
+      margin-bottom: 0.5rem;
+    }
+
+    .input-group { margin-bottom: 1.25rem; }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      padding: 0.4rem 1rem;
+      border: 1.5px solid #ddd;
+      border-radius: 6px;
+      background: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #555;
+      transition: all 0.15s;
+    }
+
+    .tab.active {
+      border-color: #2563eb;
+      color: #2563eb;
+      background: #eff6ff;
+      font-weight: 500;
+    }
+
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    #record-btn {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.6rem 1.2rem;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.15s;
+    }
+
+    #record-btn:hover { border-color: #aaa; }
+
+    #record-btn.recording {
+      border-color: #dc2626;
+      color: #dc2626;
+      background: #fef2f2;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #aaa;
+      transition: background 0.15s;
+    }
+
+    #record-btn.recording .dot {
+      background: #dc2626;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    #record-status {
+      margin-top: 0.5rem;
+      font-size: 0.85rem;
+      color: #666;
+      min-height: 1.2em;
+    }
+
+    audio { width: 100%; margin-top: 0.75rem; border-radius: 6px; }
+    audio:not([src]) { display: none; }
+
+    input[type="file"] {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1.5px dashed #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 0.65rem 0.75rem;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus { outline: none; border-color: #2563eb; }
+
+    #transcribe-btn {
+      width: 100%;
+      padding: 0.75rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 0.25rem;
+    }
+
+    #transcribe-btn:hover { background: #1d4ed8; }
+    #transcribe-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    .result-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #f8faff;
+      border: 1.5px solid #dbeafe;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .result-box.visible { display: block; }
+
+    .result-text {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: #1a1a1a;
+      white-space: pre-wrap;
+    }
+
+    .metrics {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid #dbeafe;
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    .metric { font-size: 0.9rem; color: #555; }
+    .metric span { font-weight: 600; color: #1a1a1a; }
+
+    .error-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      background: #fef2f2;
+      border: 1.5px solid #fecaca;
+      border-radius: 8px;
+      color: #dc2626;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .error-box.visible { display: block; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Whisper Spanish ASR</h1>
+  <p class="subtitle">Fine-tuned whisper-small, informal Spanish speech</p>
+
+  <div class="input-group">
+    <div class="section-label">Audio input</div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('record')">Microphone</button>
+      <button class="tab" onclick="switchTab('upload')">Upload file</button>
+    </div>
+
+    <div id="panel-record" class="panel active">
+      <button id="record-btn" onclick="toggleRecording()">
+        <span class="dot"></span>
+        <span id="record-label">Start recording</span>
+      </button>
+      <div id="record-status"></div>
+      <audio id="audio-preview" controls></audio>
+    </div>
+
+    <div id="panel-upload" class="panel">
+      <input type="file" id="file-input" accept="audio/*" onchange="onFileSelected()" />
+      <audio id="audio-preview-upload" controls style="margin-top:0.75rem; width:100%;"></audio>
+    </div>
+  </div>
+
+  <div class="input-group">
+    <div class="section-label">Reference transcript (optional)</div>
+    <textarea id="reference" placeholder="Paste the correct transcript to compute WER and CER..."></textarea>
+  </div>
+
+  <button id="transcribe-btn" onclick="transcribe()">Transcribe</button>
+
+  <div id="result-box" class="result-box">
+    <div class="section-label">Transcription</div>
+    <div id="result-text" class="result-text"></div>
+    <div id="metrics" class="metrics" style="display:none"></div>
+  </div>
+
+  <div id="error-box" class="error-box"></div>
+</div>
+
+<script>
+  // ---------------------------------------------------------------------------
+  // Tab switching
+  // ---------------------------------------------------------------------------
+  let activeTab = "record";
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    event.target.classList.add("active");
+    document.getElementById("panel-" + tab).classList.add("active");
+  }
+
+  // ---------------------------------------------------------------------------
+  // Microphone recording
+  // ---------------------------------------------------------------------------
+  // MediaRecorder is a built-in browser API. It accesses the microphone and
+  // encodes the audio into a file (WebM/Opus on Chrome, OGG/Opus on Firefox).
+  // We collect the encoded chunks and assemble them into a Blob at the end.
+
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordedBlob = null;
+
+  async function toggleRecording() {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      mediaRecorder.stop();
+      return;
+    }
+
+    // Ask the browser for microphone access
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      setError("Microphone access denied: " + err.message);
+      return;
+    }
+
+    recordedChunks = [];
+    recordedBlob = null;
+
+    mediaRecorder = new MediaRecorder(stream);
+
+    // Every time a chunk of audio is ready, store it
+    mediaRecorder.ondataavailable = e => {
+      if (e.data.size > 0) recordedChunks.push(e.data);
+    };
+
+    // When recording stops, assemble the chunks into one Blob and show preview
+    mediaRecorder.onstop = () => {
+      recordedBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+      const url = URL.createObjectURL(recordedBlob);
+      const preview = document.getElementById("audio-preview");
+      preview.src = url;
+
+      // Stop all microphone tracks to release the device
+      stream.getTracks().forEach(t => t.stop());
+
+      const btn = document.getElementById("record-btn");
+      btn.classList.remove("recording");
+      document.getElementById("record-label").textContent = "Record again";
+      document.getElementById("record-status").textContent =
+        `Recorded ${(recordedBlob.size / 1024).toFixed(1)} KB`;
+    };
+
+    mediaRecorder.start();
+    const btn = document.getElementById("record-btn");
+    btn.classList.add("recording");
+    document.getElementById("record-label").textContent = "Stop recording";
+    document.getElementById("record-status").textContent = "Recording...";
+  }
+
+  // ---------------------------------------------------------------------------
+  // File upload preview
+  // ---------------------------------------------------------------------------
+  function onFileSelected() {
+    const file = document.getElementById("file-input").files[0];
+    if (!file) return;
+    const preview = document.getElementById("audio-preview-upload");
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+  }
+
+  // ---------------------------------------------------------------------------
+  // Transcription
+  // ---------------------------------------------------------------------------
+  // This is where the browser talks to our FastAPI backend.
+  //
+  // FormData is how you send files + text in one HTTP request. We attach the
+  // audio blob and the reference text, then POST to /transcribe.
+  //
+  // fetch() sends the request and returns a Promise. We await the response,
+  // parse it as JSON, and display the result.
+
+  async function transcribe() {
+    // Get the audio source depending on the active tab
+    let audioBlob, filename;
+    if (activeTab === "record") {
+      if (!recordedBlob) { setError("Record some audio first."); return; }
+      audioBlob = recordedBlob;
+      filename = "recording.webm";
+    } else {
+      const fileInput = document.getElementById("file-input");
+      if (!fileInput.files.length) { setError("Select a file first."); return; }
+      audioBlob = fileInput.files[0];
+      filename = fileInput.files[0].name;
+    }
+
+    const reference = document.getElementById("reference").value;
+
+    // Build the request body, a FormData object carries the audio + reference
+    const formData = new FormData();
+    formData.append("audio", audioBlob, filename);
+    formData.append("reference", reference);
+
+    // Update button state
+    const btn = document.getElementById("transcribe-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Transcribing...';
+    hideResult();
+
+    try {
+      // POST to our /transcribe endpoint and wait for the response
+      const response = await fetch("/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+
+      // Parse the JSON the server sent back
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+      } else {
+        showResult(data);
+      }
+    } catch (err) {
+      setError("Request failed: " + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Transcribe";
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Display helpers
+  // ---------------------------------------------------------------------------
+  function showResult(data) {
+    document.getElementById("error-box").classList.remove("visible");
+    const box = document.getElementById("result-box");
+    document.getElementById("result-text").textContent = data.transcription || "(empty)";
+    box.classList.add("visible");
+
+    const metrics = document.getElementById("metrics");
+    if (data.wer !== null) {
+      metrics.style.display = "flex";
+      metrics.innerHTML =
+        `<div class="metric">WER <span>${data.wer}%</span></div>` +
+        `<div class="metric">CER <span>${data.cer}%</span></div>`;
+    } else {
+      metrics.style.display = "none";
+    }
+  }
+
+  function hideResult() {
+    document.getElementById("result-box").classList.remove("visible");
+    document.getElementById("error-box").classList.remove("visible");
+  }
+
+  function setError(msg) {
+    const box = document.getElementById("error-box");
+    box.textContent = msg;
+    box.classList.add("visible");
+    document.getElementById("result-box").classList.remove("visible");
+  }
+</script>
+</body>
+</html>
