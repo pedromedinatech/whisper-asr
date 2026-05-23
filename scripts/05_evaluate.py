@@ -1,34 +1,9 @@
 """
-Comprehensive benchmark: Whisper variants vs Google Chirp vs ElevenLabs Scribe.
-
-Models
-------
-  whisper-tiny            zero-shot (local)
-  whisper-base            zero-shot (local)
-  whisper-small           zero-shot (local)
-  whisper-small-finetuned fine-tuned on VoxPopuli+MLS+personal (local)
-  google-chirp            Google Cloud Speech-to-Text v2 (API)
-  elevenlabs-scribe       ElevenLabs Speech-to-Text scribe_v1 (API)
-
-Datasets
---------
-  VoxPopuli es/test       BENCHMARK_SAMPLES samples
-  MLS Spanish/test        BENCHMARK_SAMPLES samples
-  Personal (yo)           all — speaker is the user himself
-  Personal (pedro)        all — speaker is the user's father
-  Personal (mama)         all — speaker is the user's mother
-                          (add her audios to data/personal/audio/ with
-                           speaker=mama in metadata.csv before running)
-
 API keys
 --------
   Set GOOGLE_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS env vars for Chirp.
   Set ELEVENLABS_API_KEY env var for ElevenLabs.
   Models are skipped (with a warning) if credentials are missing.
-
-Output
-------
-  results/benchmark/05_model_comparison.csv
 """
 
 import io
@@ -72,7 +47,7 @@ BENCHMARK_DATASETS = [
     },
 ]
 
-# speaker value in metadata.csv -> human-readable label
+# speaker value in metadata.csv
 PERSONAL_SPEAKERS = {
     "yo": "personal/yo (user)",
     "pedro": "personal/pedro (father)",
@@ -97,14 +72,12 @@ def audio_to_wav_bytes(audio: np.ndarray, sr: int = 16000) -> bytes:
     return buf.getvalue()
 
 
-# ---------------------------------------------------------------------------
 # Whisper (local) helpers
-# ---------------------------------------------------------------------------
 
 def load_whisper(model_id_or_path: str) -> tuple:
     path = Path(model_id_or_path)
     source = str(path) if path.exists() else model_id_or_path
-    print(f"  Loading {source} ...")
+    print(f"Loading {source} ...")
     processor = WhisperProcessor.from_pretrained(source, language="spanish", task="transcribe")
     model = WhisperForConditionalGeneration.from_pretrained(source)
     model.to(device)
@@ -120,9 +93,7 @@ def whisper_transcribe(audio: np.ndarray, processor, model) -> str:
     return processor.batch_decode(ids, skip_special_tokens=True)[0]
 
 
-# ---------------------------------------------------------------------------
 # Google Chirp helper
-# ---------------------------------------------------------------------------
 
 def chirp_transcribe(audio_bytes: bytes, project_id: str) -> str:
     from google.cloud.speech_v2 import SpeechClient
@@ -146,9 +117,7 @@ def chirp_transcribe(audio_bytes: bytes, project_id: str) -> str:
     return " ".join(r.alternatives[0].transcript for r in response.results if r.alternatives)
 
 
-# ---------------------------------------------------------------------------
 # ElevenLabs Scribe helper
-# ---------------------------------------------------------------------------
 
 def elevenlabs_transcribe(audio_bytes: bytes, api_key: str) -> str:
     import httpx
@@ -164,13 +133,11 @@ def elevenlabs_transcribe(audio_bytes: bytes, api_key: str) -> str:
     return response.json().get("text", "")
 
 
-# ---------------------------------------------------------------------------
 # Generic evaluation runners
-# ---------------------------------------------------------------------------
 
 def eval_hf_whisper(ds_cfg: dict, processor, model, max_samples: int) -> dict:
     label = ds_cfg["label"]
-    print(f"    {label} (n={max_samples}) ...")
+    print(f"{label} (n={max_samples}) ...")
     dataset = load_dataset(ds_cfg["hf_id"], ds_cfg["config"], split=ds_cfg["split"], streaming=True)
     dataset = dataset.cast_column("audio", Audio(decode=False))
 
@@ -189,17 +156,17 @@ def eval_hf_whisper(ds_cfg: dict, processor, model, max_samples: int) -> dict:
         hyps.append(normalize(whisper_transcribe(audio, processor, model)))
 
         if (i + 1) % 50 == 0:
-            print(f"      [{i+1}/{max_samples}] WER so far: {jiwer.wer(refs, hyps)*100:.2f}%")
+            print(f"[{i+1}/{max_samples}] WER so far: {jiwer.wer(refs, hyps)*100:.2f}%")
 
     wer = jiwer.wer(refs, hyps)
     cer = jiwer.cer(refs, hyps)
-    print(f"      WER: {wer*100:.2f}%  CER: {cer*100:.2f}%")
+    print(f"WER: {wer*100:.2f}%  CER: {cer*100:.2f}%")
     return {"dataset": label, "samples": len(refs), "wer": round(wer, 4), "cer": round(cer, 4)}
 
 
 def eval_hf_api(ds_cfg: dict, transcribe_fn, max_samples: int) -> dict:
     label = ds_cfg["label"]
-    print(f"    {label} (n={max_samples}) ...")
+    print(f"{label} (n={max_samples}) ...")
     dataset = load_dataset(ds_cfg["hf_id"], ds_cfg["config"], split=ds_cfg["split"], streaming=True)
     dataset = dataset.cast_column("audio", Audio(decode=False))
 
@@ -218,18 +185,18 @@ def eval_hf_api(ds_cfg: dict, transcribe_fn, max_samples: int) -> dict:
         try:
             hyp = transcribe_fn(wav_bytes)
         except Exception as exc:
-            print(f"      WARNING sample {i}: {exc}")
+            print(f"WARNING sample {i}: {exc}")
             hyp = ""
 
         refs.append(normalize(sample[ds_cfg["text_col"]]))
         hyps.append(normalize(hyp))
 
         if (i + 1) % 25 == 0:
-            print(f"      [{i+1}/{max_samples}] WER so far: {jiwer.wer(refs, hyps)*100:.2f}%")
+            print(f"[{i+1}/{max_samples}] WER so far: {jiwer.wer(refs, hyps)*100:.2f}%")
 
     wer = jiwer.wer(refs, hyps)
     cer = jiwer.cer(refs, hyps)
-    print(f"      WER: {wer*100:.2f}%  CER: {cer*100:.2f}%")
+    print(f"WER: {wer*100:.2f}%  CER: {cer*100:.2f}%")
     return {"dataset": label, "samples": len(refs), "wer": round(wer, 4), "cer": round(cer, 4)}
 
 
@@ -239,7 +206,7 @@ def eval_personal_whisper(speaker: str, label: str, processor, model) -> dict | 
     meta = pd.read_csv(PERSONAL_META)
     subset = meta[meta["speaker"] == speaker]
     if subset.empty:
-        print(f"    No entries for speaker={speaker}, skipping.")
+        print(f"No entries for speaker={speaker}, skipping.")
         return None
 
     refs, hyps, missing = [], [], 0
@@ -255,11 +222,11 @@ def eval_personal_whisper(speaker: str, label: str, processor, model) -> dict | 
     if not refs:
         return None
     if missing:
-        print(f"    Warning: {missing} files missing.")
+        print(f"Warning: {missing} files missing.")
 
     wer = jiwer.wer(refs, hyps)
     cer = jiwer.cer(refs, hyps)
-    print(f"      {label}: WER {wer*100:.2f}%  CER {cer*100:.2f}%  (n={len(refs)})")
+    print(f"{label}: WER {wer*100:.2f}%  CER {cer*100:.2f}%  (n={len(refs)})")
     return {"dataset": label, "samples": len(refs), "wer": round(wer, 4), "cer": round(cer, 4)}
 
 
@@ -282,7 +249,7 @@ def eval_personal_api(speaker: str, label: str, transcribe_fn) -> dict | None:
         try:
             hyp = transcribe_fn(wav_bytes)
         except Exception as exc:
-            print(f"      WARNING {row['filename']}: {exc}")
+            print(f"WARNING {row['filename']}: {exc}")
             hyp = ""
         refs.append(normalize(str(row["transcript"])))
         hyps.append(normalize(hyp))
@@ -292,13 +259,11 @@ def eval_personal_api(speaker: str, label: str, transcribe_fn) -> dict | None:
 
     wer = jiwer.wer(refs, hyps)
     cer = jiwer.cer(refs, hyps)
-    print(f"      {label}: WER {wer*100:.2f}%  CER {cer*100:.2f}%  (n={len(refs)})")
+    print(f"{label}: WER {wer*100:.2f}%  CER {cer*100:.2f}%  (n={len(refs)})")
     return {"dataset": label, "samples": len(refs), "wer": round(wer, 4), "cer": round(cer, 4)}
 
 
-# ---------------------------------------------------------------------------
 # Main
-# ---------------------------------------------------------------------------
 
 # Set to True to skip local Whisper inference and only re-run API models.
 # Existing Whisper rows are loaded from the CSV and preserved.
@@ -311,7 +276,7 @@ if APIS_ONLY and (RESULTS_DIR / "05_model_comparison.csv").exists():
     rows = existing[~existing["model"].isin(["google-chirp", "elevenlabs-scribe"])].to_dict("records")
     print(f"APIS_ONLY mode: loaded {len(rows)} existing Whisper rows, re-running APIs only.")
 
-# --- Local Whisper models ---------------------------------------------------
+# Local Whisper models
 
 whisper_models = [
     ("openai/whisper-tiny", "zero-shot"),
@@ -325,9 +290,7 @@ else:
 
 for model_source, variant in ([] if APIS_ONLY else whisper_models):
     model_label = Path(model_source).name if Path(model_source).exists() else model_source
-    print(f"\n{'='*60}")
     print(f"Model: {model_label} ({variant})")
-    print("=" * 60)
 
     processor, model = load_whisper(model_source)
 
@@ -344,7 +307,7 @@ for model_source, variant in ([] if APIS_ONLY else whisper_models):
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-# --- Google Chirp -----------------------------------------------------------
+# Google Chirp
 
 google_project = os.environ.get("GOOGLE_PROJECT_ID", "")
 if not google_project:
@@ -352,9 +315,7 @@ if not google_project:
 else:
     try:
         from google.cloud.speech_v2 import SpeechClient
-        print(f"\n{'='*60}")
         print("Model: google-chirp (API)")
-        print("=" * 60)
 
         def chirp_fn(wav_bytes: bytes) -> str:
             return chirp_transcribe(wav_bytes, google_project)
@@ -372,7 +333,7 @@ else:
         print("Skipping Google Chirp: google-cloud-speech not installed.")
         print("  Install with: pip install google-cloud-speech")
 
-# --- ElevenLabs Scribe ------------------------------------------------------
+# ElevenLabs Scribe
 
 el_api_key = os.environ.get("ELEVENLABS_API_KEY", "")
 if not el_api_key:
@@ -380,9 +341,7 @@ if not el_api_key:
 else:
     try:
         import httpx
-        print(f"\n{'='*60}")
         print("Model: elevenlabs-scribe (API)")
-        print("=" * 60)
 
         def elevenlabs_fn(wav_bytes: bytes) -> str:
             return elevenlabs_transcribe(wav_bytes, el_api_key)
@@ -400,14 +359,12 @@ else:
         print("Skipping ElevenLabs: httpx not installed.")
         print("  Install with: pip install httpx")
 
-# --- Save results -----------------------------------------------------------
+# Save results
 
 df = pd.DataFrame(rows)
 output_path = RESULTS_DIR / "05_model_comparison.csv"
 df.to_csv(output_path, index=False)
 
-print(f"\n{'='*60}")
 print("FINAL RESULTS")
-print("=" * 60)
 print(df.to_string(index=False))
 print(f"\nSaved to {output_path}")
