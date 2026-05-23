@@ -1,0 +1,31 @@
+model,variant,dataset,samples,wer,cer
+openai/whisper-tiny,zero-shot,voxpopuli/es/test,200,0.4805,0.2531
+openai/whisper-tiny,zero-shot,mls/spanish/test,200,0.3143,0.1352
+openai/whisper-tiny,zero-shot,personal/yo (user),50,0.2591,0.0995
+openai/whisper-tiny,zero-shot,personal/pedro (father),50,0.1285,0.0438
+openai/whisper-tiny,zero-shot,personal/isabel (mother),24,0.1661,0.0543
+openai/whisper-base,zero-shot,voxpopuli/es/test,200,0.1946,0.1178
+openai/whisper-base,zero-shot,mls/spanish/test,200,0.1625,0.0531
+openai/whisper-base,zero-shot,personal/yo (user),50,0.1685,0.0633
+openai/whisper-base,zero-shot,personal/pedro (father),50,0.0743,0.0281
+openai/whisper-base,zero-shot,personal/isabel (mother),24,0.0831,0.0307
+openai/whisper-small,zero-shot,voxpopuli/es/test,200,0.1883,0.1341
+openai/whisper-small,zero-shot,mls/spanish/test,200,0.0854,0.0296
+openai/whisper-small,zero-shot,personal/yo (user),50,0.0685,0.0284
+openai/whisper-small,zero-shot,personal/pedro (father),50,0.0294,0.0142
+openai/whisper-small,zero-shot,personal/isabel (mother),24,0.0322,0.0148
+whisper-spanish-finetuned,fine-tuned,voxpopuli/es/test,200,0.0969,0.055
+whisper-spanish-finetuned,fine-tuned,mls/spanish/test,200,0.118,0.0389
+whisper-spanish-finetuned,fine-tuned,personal/yo (user),50,0.002,0.0012
+whisper-spanish-finetuned,fine-tuned,personal/pedro (father),50,0.0008,0.0011
+whisper-spanish-finetuned,fine-tuned,personal/isabel (mother),24,0.0203,0.0074
+google-chirp,api,voxpopuli/es/test,100,0.1012,0.072
+google-chirp,api,mls/spanish/test,100,0.0292,0.0089
+google-chirp,api,personal/yo (user),50,0.0347,0.0169
+google-chirp,api,personal/pedro (father),50,0.0212,0.013
+google-chirp,api,personal/isabel (mother),24,0.0237,0.0146
+elevenlabs-scribe,api,voxpopuli/es/test,100,0.0868,0.0602
+elevenlabs-scribe,api,mls/spanish/test,100,0.0583,0.0454
+elevenlabs-scribe,api,personal/yo (user),50,0.0465,0.0384
+elevenlabs-scribe,api,personal/pedro (father),50,0.0175,0.015
+elevenlabs-scribe,api,personal/isabel (mother),24,0.0754,0.0729
