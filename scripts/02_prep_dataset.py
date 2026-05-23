@@ -2,6 +2,9 @@
 Sources:
   VoxPopuli: facebook/voxpopuli, config 'es'
   MLS: facebook/multilingual_librispeech, config 'spanish'
+
+Also runs a zero-shot Whisper benchmark on the MLS test split so that the
+result is directly comparable with the VoxPopuli baseline in 01_baseline.py.
 """
 
 import io
@@ -11,14 +14,19 @@ import torchaudio
 import soundfile as sf
 import numpy as np
 import pandas as pd
+import jiwer
 from pathlib import Path
 from datasets import load_dataset, Audio, Dataset, concatenate_datasets
-from transformers import WhisperProcessor
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
 
 MODEL_ID = "openai/whisper-small"
 VP_DIR = Path("data/opendata/processed/voxpopuli_es")
 MLS_DIR = Path("data/opendata/processed/mls_es")
 COMBINED_DIR = Path("data/opendata/processed/combined_es")
+RESULTS_DIR = Path("results/benchmark")
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+MLS_BENCHMARK_SAMPLES = 500
 
 SAMPLE_LIMITS = {
     "voxpopuli": {"train": 5000, "validation": 500},
