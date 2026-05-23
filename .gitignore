@@ -4,6 +4,8 @@ dataset/
 models/
 results/logs/
 
+scripts/_*.py
+
 __pycache__/
 *.py[cod]
 .env
