@@ -74,6 +74,7 @@ CHUNKS = {
 
 META_PATH = Path("data/personal/metadata.csv")
 META_PATH.parent.mkdir(parents=True, exist_ok=True)
+Path("data/personal/audio").mkdir(parents=True, exist_ok=True)
 
 rows = []
 for chunk_id, transcript in CHUNKS.items():
