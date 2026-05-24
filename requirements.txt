@@ -1,19 +1,11 @@
-# PyTorch is NOT listed here — install it first from https://pytorch.org/get-started/locally
-# Select your OS, pip, and CUDA version to get the correct command.
-# Example for CUDA 12.8 (RTX 40/50 series):
-#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128
-
-transformers>=4.40
-datasets>=2.18
-evaluate
-jiwer
-librosa
-soundfile
-accelerate
-openai-whisper
-gradio
-pandas
-tensorboard
 fastapi
 uvicorn[standard]
+transformers
+torch
+librosa
+jiwer
+anthropic
+soundfile
 python-multipart
+pydantic
+python-dotenv

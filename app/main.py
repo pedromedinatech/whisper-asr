@@ -12,10 +12,15 @@ import torch
 import numpy as np
 import librosa
 import jiwer
+import anthropic
+from dotenv import load_dotenv
 from pathlib import Path
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
+
+load_dotenv()
 
 # Model loading
 # This runs once when the server starts, not on every request.
@@ -31,9 +36,18 @@ model.to(DEVICE)
 model.eval()
 print("Model ready.")
 
-# FastAPI app
-# `app` is the FastAPI application object. You attach endpoints to it using
-# decorators like @app.get(...) and @app.post(...).
+anthropic_client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+COACH_SYSTEM_PROMPT = """Eres un asistente de práctica de español. El usuario ha hablado en español \
+y su voz ha sido transcrita automáticamente. Tu tarea es analizar el texto transcrito y dar \
+feedback breve y concreto sobre errores gramaticales, vocabulario poco natural, y cómo expresar \
+la misma idea de forma más clara o precisa.
+
+Si el texto no tiene errores destacables, dilo y haz un comentario positivo breve.
+Responde siempre en español. Sé directo y útil.
+
+Formato estricto: texto plano, sin markdown, sin asteriscos, sin guiones como viñetas, \
+sin flechas, sin emojis, sin rayas largas (--). Usa solo párrafos normales."""
 
 app = FastAPI(title="Whisper Spanish ASR")
 
@@ -109,3 +123,28 @@ async def transcribe(
 
     finally:
         os.unlink(tmp_path)
+
+
+# Endpoint 3: POST /feedback
+# Receives a transcription string and returns language-coach feedback from Claude.
+# Kept separate from /transcribe so the UI can show the transcription immediately
+# and stream the feedback in a second step without blocking.
+
+class FeedbackRequest(BaseModel):
+    transcription: str
+
+
+@app.post("/feedback")
+async def feedback(req: FeedbackRequest):
+    if not anthropic_client.api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not set")
+    if not req.transcription.strip():
+        raise HTTPException(status_code=400, detail="Transcription is empty")
+
+    message = anthropic_client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        system=COACH_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": req.transcription}],
+    )
+    return {"feedback": message.content[0].text}

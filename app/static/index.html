@@ -186,6 +186,46 @@
     .metric { font-size: 0.9rem; color: #555; }
     .metric span { font-weight: 600; color: #1a1a1a; }
 
+    .feedback-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: #f0fdf4;
+      border: 1.5px solid #bbf7d0;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .feedback-box.visible { display: block; }
+
+    .feedback-text {
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: #1a1a1a;
+      white-space: pre-wrap;
+    }
+
+    .feedback-loading {
+      font-size: 0.9rem;
+      color: #16a34a;
+      display: none;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.5rem;
+    }
+
+    .feedback-loading.visible { display: flex; }
+
+    .spinner-green {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #16a34a;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      flex-shrink: 0;
+    }
+
     .error-box {
       margin-top: 1.5rem;
       padding: 1rem;
@@ -252,6 +292,15 @@
     <div class="section-label">Transcription</div>
     <div id="result-text" class="result-text"></div>
     <div id="metrics" class="metrics" style="display:none"></div>
+  </div>
+
+  <div id="feedback-loading" class="feedback-loading">
+    <span class="spinner-green"></span> Analizando con Claude...
+  </div>
+
+  <div id="feedback-box" class="feedback-box">
+    <div class="section-label" style="color:#16a34a;">Feedback — asistente de práctica</div>
+    <div id="feedback-text" class="feedback-text"></div>
   </div>
 
   <div id="error-box" class="error-box"></div>
@@ -381,19 +430,40 @@
     hideResult();
 
     try {
-      // POST to our /transcribe endpoint and wait for the response
+      // Step 1: transcribe audio
       const response = await fetch("/transcribe", {
         method: "POST",
         body: formData,
       });
-
-      // Parse the JSON the server sent back
       const data = await response.json();
 
       if (data.error) {
         setError(data.error);
-      } else {
-        showResult(data);
+        return;
+      }
+
+      showResult(data);
+
+      // Step 2: send transcription to Claude for feedback
+      if (data.transcription && data.transcription.trim()) {
+        document.getElementById("feedback-loading").classList.add("visible");
+        try {
+          const fbResponse = await fetch("/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcription: data.transcription }),
+          });
+          const fbData = await fbResponse.json();
+          if (fbData.feedback) {
+            showFeedback(fbData.feedback);
+          } else if (fbData.detail) {
+            showFeedback("(feedback no disponible: " + fbData.detail + ")");
+          }
+        } catch (fbErr) {
+          showFeedback("(error al obtener feedback: " + fbErr.message + ")");
+        } finally {
+          document.getElementById("feedback-loading").classList.remove("visible");
+        }
       }
     } catch (err) {
       setError("Request failed: " + err.message);
@@ -423,8 +493,15 @@
     }
   }
 
+  function showFeedback(text) {
+    document.getElementById("feedback-text").textContent = text;
+    document.getElementById("feedback-box").classList.add("visible");
+  }
+
   function hideResult() {
     document.getElementById("result-box").classList.remove("visible");
+    document.getElementById("feedback-box").classList.remove("visible");
+    document.getElementById("feedback-loading").classList.remove("visible");
     document.getElementById("error-box").classList.remove("visible");
   }
 
