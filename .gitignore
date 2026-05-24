@@ -3,6 +3,7 @@ data/
 dataset/
 models/
 results/logs/
+docs/
 
 scripts/_*.py
 

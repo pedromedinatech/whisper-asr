@@ -1,6 +1,8 @@
 # Whisper Fine-Tuning for Informal Spanish ASR
 
-Fine-tuning [openai/whisper-small](https://huggingface.co/openai/whisper-small) on Spanish speech data to improve transcription of informal, conversational audio. Benchmarked against zero-shot Whisper variants, Google Chirp, and ElevenLabs Scribe.
+Fine-tuning [openai/whisper-small](https://huggingface.co/openai/whisper-small) on Spanish speech data to improve transcription of informal, conversational audio. Benchmarked against zero-shot Whisper variants, Google Chirp, and ElevenLabs Scribe. Includes a web demo with Claude-powered language feedback.
+
+![Demo](demo.gif)
 
 ---
 
@@ -49,15 +51,27 @@ pip install -r requirements.txt
 conda env create -f environment.yaml && conda activate whisper-asr
 ```
 
-**3. API keys** (only needed for the benchmark step, not for training):
+**3. API keys:**
 
 Create a `.env` file in the project root:
 
 ```
+# Required for the web demo (Claude feedback)
+ANTHROPIC_API_KEY=your-key
+
+# Required only for the benchmark scripts
 GOOGLE_PROJECT_ID=your-gcp-project-id
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ELEVENLABS_API_KEY=your-key
 ```
+
+**4. Run the web demo:**
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Open `http://localhost:8000`. Upload or record audio in Spanish, click Transcribe, and the app will show the transcription followed by language feedback from Claude.
 
 ---
 
@@ -148,7 +162,8 @@ whisper/
 │   ├── 02_prep_dataset.py        # download + preprocess open datasets
 │   ├── 03_personal_data.py       # process personal recordings
 │   ├── 04_finetune.py            # fine-tuning
-│   └── 05_evaluate.py            # full benchmark
+│   ├── 05_evaluate.py            # full benchmark
+│   └── 06_generate_figures.py    # generate paper figures (training curve, WER charts)
 ├── results/benchmark/
 │   ├── 01_baseline.csv           # zero-shot baseline results
 │   ├── 03_personal_sample.csv    # personal audio sample inspection
@@ -161,7 +176,9 @@ whisper/
 │   └── opendata/processed/       # downloaded HF datasets (not tracked)
 ├── models/
 │   └── whisper-spanish-finetuned/  # saved checkpoint (not tracked)
-├── app/                          # demo app (in progress)
+├── app/
+│   ├── main.py                   # FastAPI backend (transcribe + Claude feedback)
+│   └── static/index.html         # web frontend
 ├── requirements.txt
 └── environment.yaml
 ```
