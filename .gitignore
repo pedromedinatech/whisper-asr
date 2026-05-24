@@ -3,7 +3,9 @@ data/
 dataset/
 models/
 results/logs/
-docs/
+docs/demo.mp4
+docs/theory
+docs/figures
 
 scripts/_*.py
 
